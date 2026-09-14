@@ -10,7 +10,7 @@ Backend inicial do projeto **ACESSA+**, preparado com:
 - `django-cors-headers`
 - `python-dotenv`
 
-Esta etapa cria apenas a base técnica do backend. Ainda não existem models de domínio, serializers, views, endpoints de negócio, autenticação ou regras de negócio.
+O backend inclui consulta de locais e autenticação JWT com o usuário padrão do Django.
 
 ## Objetivo desta base
 
@@ -141,7 +141,41 @@ Acesse:
 http://127.0.0.1:8000/admin/
 ```
 
-Nesta etapa, o projeto ainda não possui endpoints de API de domínio. O endereço disponível é o painel administrativo inicial do Django.
+Os endpoints `GET /api/locais/` e `GET /api/locais/{id}/` são públicos, incluindo busca por nome e consulta das coordenadas.
+
+## Autenticação JWT
+
+A autenticação utiliza `djangorestframework-simplejwt`. Para testar localmente, utilize um usuário Django existente ou crie um com `python manage.py createsuperuser`.
+
+Envie `POST /api/auth/login/` com `Content-Type: application/json`:
+
+```json
+{"username": "usuario", "password": "senha"}
+```
+
+Resposta HTTP 200 (valores ilustrativos):
+
+```json
+{"refresh": "<refresh-token>", "access": "<access-token>"}
+```
+
+Credenciais inválidas retornam HTTP 401. Campos obrigatórios ausentes retornam HTTP 400.
+
+O access token expira em 15 minutos e o refresh token em 1 dia. Para renovar o access token, envie `POST /api/auth/refresh/`:
+
+```json
+{"refresh": "<refresh-token>"}
+```
+
+Resposta HTTP 200:
+
+```json
+{"access": "<novo-access-token>"}
+```
+
+Um refresh token inválido ou expirado retorna HTTP 401. Use `Authorization: Bearer <access-token>` para autenticar requisições.
+
+A permissão padrão é `AllowAny`: as consultas de locais continuam acessíveis sem token. Views futuras que exigirem autenticação devem declarar `permission_classes = [IsAuthenticated]`, importando `IsAuthenticated` de `rest_framework.permissions`. Um token inválido enviado no cabeçalho pode retornar HTTP 401 mesmo em uma view pública.
 
 ## Observações
 

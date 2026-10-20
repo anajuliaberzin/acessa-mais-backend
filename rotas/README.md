@@ -100,4 +100,6 @@ Mensagens externas e credenciais não são repassadas ao cliente. Um 404 genéri
 
 Os testes fazem POST pela stack DRF e mockam exclusivamente o transporte do provider: não precisam de chave real, rede, migrations ou PostgreSQL. Incluem contrato da chamada, normalização, seleção, erros, limites, casos sem alternativas e insuficiência de acessibilidade.
 
-A integração com o frontend mockado é uma etapa separada. Ele deverá fornecer coordenadas, renderizar GeoJSON, tratar `rota_acessivel: null` e nunca converter score nulo em zero ou em um score fictício. A validação com chamadas reais depende de uma chave válida e da cobertura/quota do provider; fixtures não atestam cobertura local.
+O frontend em `/rotas` envia as coordenadas para esta API e desenha a geometria GeoJSON em SVG, sem mapa base. Trata `rota_acessivel: null` e não converte score nulo em zero. Abra-o em `http://localhost:4200/rotas`, com o Django em `http://127.0.0.1:8000`; a origem do frontend deve constar em `CORS_ALLOWED_ORIGINS`.
+
+Em 20/10/2026, uma verificação explícita do componente Angular com transporte HTTP real (sem mock) passou: formulário → Django → OpenRouteService → opções e troca do traçado. A consulta das coordenadas acima retornou 18,45 minutos, 1.537,7 metros e duas alternativas. O preflight CORS também retornou 200 com a origem permitida. Essa consulta não confirma acessibilidade, e os resultados podem variar. A inspeção visual em navegador desktop/mobile continua pendente. Os testes regulares permanecem isolados da rede e não consomem quota do provider.

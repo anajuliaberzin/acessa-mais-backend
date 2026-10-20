@@ -1,23 +1,111 @@
-from rest_framework import generics
+from datetime import date
+from math import isfinite
+from django.db import transaction, IntegrityError
+from django.db.models import Avg, Count, Q
+from django.db.models.functions import TruncDate
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Local, Avaliacao
+from .serializers import LocalSerializer, AvaliacaoSerializer
+from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
 
-from .models import Local
-from .serializers import LocalSerializer
+
+class Paginacao(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+def locais_publicos():
+    return Local.objects.filter(cidade='Sorocaba', estado='SP', localizacao_confirmada=True).annotate(
+        media_avaliacoes=Avg('avaliacoes__nota'), total_avaliacoes=Count('avaliacoes')).prefetch_related('fotos')
+
+
+def filtrar_locais(queryset, params):
+    if nome := params.get('nome', '').strip():
+        queryset = queryset.filter(nome__icontains=nome)
+    if categoria := params.get('categoria', '').strip():
+        queryset = queryset.filter(categoria__iexact=categoria)
+    recursos = [x for x in params.get('recursos', '').split(',') if x]
+    if set(recursos) - set(PESOS):
+        raise ValidationError({'recursos': 'Recurso desconhecido.'})
+    for recurso in recursos:
+        queryset = queryset.filter(**{f'recursos__{recurso}': 'atendido'})
+    if necessidade := params.get('necessidade'):
+        if necessidade not in NECESSIDADES:
+            raise ValidationError({'necessidade': 'Necessidade desconhecida.'})
+        condicao = Q()
+        for recurso in NECESSIDADES[necessidade]:
+            condicao |= Q(**{f'recursos__{recurso}': 'atendido'})
+        queryset = queryset.filter(condicao)
+    if bbox := params.get('bbox'):
+        try:
+            oeste, sul, leste, norte = [float(x) for x in bbox.split(',')]
+            if not all(isfinite(x) for x in (oeste, sul, leste, norte)) or not (-180 <= oeste <= leste <= 180 and -90 <= sul <= norte <= 90):
+                raise ValueError
+        except ValueError:
+            raise ValidationError({'bbox': 'Use oeste,sul,leste,norte em graus válidos.'})
+        queryset = queryset.filter(longitude__range=(oeste, leste), latitude__range=(sul, norte))
+    return queryset
 
 
 class LocalListView(generics.ListAPIView):
-    queryset = Local.objects.all()
     serializer_class = LocalSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = Paginacao
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        nome = self.request.query_params.get("nome")
-
-        if nome:
-            queryset = queryset.filter(nome__icontains=nome)
-
-        return queryset
+        queryset = filtrar_locais(locais_publicos(), self.request.query_params)
+        ordem = self.request.query_params.get('ordenacao', 'nome')
+        if ordem not in ('nome', 'acessibilidade'):
+            raise ValidationError({'ordenacao': 'Use nome ou acessibilidade.'})
+        if ordem == 'acessibilidade':
+            locais = [local for local in queryset if calcular_acessibilidade(local.recursos)['nota'] is not None]
+            return sorted(locais, key=lambda local: (-calcular_acessibilidade(local.recursos)['nota'], local.nome, local.pk))
+        return queryset.order_by('nome', 'pk')
 
 
 class LocalDetailView(generics.RetrieveAPIView):
-    queryset = Local.objects.all()
     serializer_class = LocalSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return locais_publicos()
+
+
+class FiltrosView(APIView):
+    def get(self, request):
+        return Response({'categorias': list(Local.objects.filter(cidade='Sorocaba', estado='SP', localizacao_confirmada=True).order_by('categoria').values_list('categoria', flat=True).distinct()),
+                         'recursos': list(PESOS), 'necessidades': list(NECESSIDADES)})
+
+
+class MapaView(generics.ListAPIView):
+    serializer_class = LocalSerializer
+    pagination_class = Paginacao
+
+    def get_queryset(self):
+        return filtrar_locais(locais_publicos().exclude(latitude=None).exclude(longitude=None), self.request.query_params).order_by('pk')
+
+
+class AvaliacoesView(generics.ListCreateAPIView):
+    serializer_class = AvaliacaoSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = Paginacao
+
+    def get_queryset(self):
+        local = get_object_or_404(locais_publicos(), pk=self.kwargs['pk'])
+        return Avaliacao.objects.filter(local=local).select_related('local')
+
+    def perform_create(self, serializer):
+        local = get_object_or_404(locais_publicos(), pk=self.kwargs['pk'])
+        try:
+            with transaction.atomic():
+                serializer.save(autor=self.request.user, local=local)
+        except IntegrityError:
+            raise ValidationError('Você já avaliou este local.')

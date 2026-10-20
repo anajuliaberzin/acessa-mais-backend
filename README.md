@@ -1,5 +1,9 @@
 # ACESSA+
 
+Consulte [MVP.md](MVP.md) para as regras oficiais, os endpoints de locais/perfil/ocorrências/gestão,
+as migrations e a execução dos testes. A listagem de locais agora é paginada e publica somente
+cadastros com localização confirmada em Sorocaba/SP.
+
 Backend inicial do projeto **ACESSA+**, preparado com:
 
 - Python

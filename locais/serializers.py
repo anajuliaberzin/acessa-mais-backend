@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Local, FotoLocal, Avaliacao, Ocorrencia, HistoricoOcorrencia
+from .models import Local, FotoLocal, Avaliacao, Perfil, Ocorrencia, HistoricoOcorrencia
 from .acessibilidade import calcular_acessibilidade
 
 
@@ -37,6 +37,22 @@ class AvaliacaoSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'local', 'created_at')
 
 
+class PerfilSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source='usuario_id', read_only=True)
+    cidade = serializers.SerializerMethodField()
+    uf = serializers.SerializerMethodField()
+    membroDesde = serializers.DateTimeField(source='usuario.date_joined', read_only=True)
+    gestor = serializers.BooleanField(source='usuario.is_staff', read_only=True)
+
+    def get_cidade(self, obj):
+        return 'Sorocaba'
+
+    def get_uf(self, obj):
+        return 'SP'
+
+    class Meta:
+        model = Perfil
+        fields = ('id', 'nome', 'cidade', 'uf', 'membroDesde', 'preferencias', 'gestor')
 
 
 class HistoricoSerializer(serializers.ModelSerializer):

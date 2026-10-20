@@ -11,8 +11,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Local, Avaliacao, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
-from .serializers import LocalSerializer, AvaliacaoSerializer, OcorrenciaSerializer
+from .models import Local, Avaliacao, Perfil, Favorito, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
+from .serializers import LocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer
 from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
 
 
@@ -111,16 +111,62 @@ class AvaliacoesView(generics.ListCreateAPIView):
             raise ValidationError('Você já avaliou este local.')
 
 
+class MinhaAvaliacaoView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AvaliacaoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Avaliacao.objects.filter(autor=self.request.user).select_related('local')
 
 
+class PerfilView(generics.RetrieveUpdateAPIView):
+    serializer_class = PerfilSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_object(self):
+        perfil, _ = Perfil.objects.get_or_create(usuario=self.request.user, defaults={'nome': self.request.user.get_full_name() or self.request.user.username})
+        return perfil
 
 
+class MinhasAvaliacoesView(generics.ListAPIView):
+    serializer_class = AvaliacaoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = Paginacao
+
+    def get_queryset(self):
+        return Avaliacao.objects.filter(autor=self.request.user).select_related('local')
 
 
+class FavoritosView(generics.ListAPIView):
+    serializer_class = LocalSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = Paginacao
+
+    def get_queryset(self):
+        return locais_publicos().filter(pk__in=Favorito.objects.filter(usuario=self.request.user).values('local_id')).order_by('nome', 'pk')
 
 
+class FavoritoView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request, pk):
+        local = get_object_or_404(locais_publicos(), pk=pk)
+        _, criado = Favorito.objects.get_or_create(usuario=request.user, local=local)
+        return Response(status=201 if criado else 200)
+
+    def delete(self, request, pk):
+        Favorito.objects.filter(usuario=request.user, local_id=pk).delete()
+        return Response(status=204)
 
 
+class ContribuicoesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({'avaliacoes': Avaliacao.objects.filter(autor=request.user).count(),
+                         'ocorrencias': Ocorrencia.objects.filter(autor=request.user).count(),
+                         'favoritos': Favorito.objects.filter(usuario=request.user, local__localizacao_confirmada=True).count()})
 
 
 class OcorrenciasView(generics.ListCreateAPIView):

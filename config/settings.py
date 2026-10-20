@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "locais",
+    "rotas",
 ]
 
 MIDDLEWARE = [
@@ -92,6 +93,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+ROUTING_API_KEY = env("ROUTING_API_KEY", "")
+ROUTING_TIMEOUT_SECONDS = env("ROUTING_TIMEOUT_SECONDS", "10")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {

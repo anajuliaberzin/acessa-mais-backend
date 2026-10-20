@@ -82,6 +82,20 @@ Criação de ocorrência aceita JSON ou multipart com `endereco`, `tipoProblema`
 Imagem JPEG, PNG ou WebP válida de até 5 MB. Autor, protocolo e status inicial são definidos pelo servidor.
 O front utiliza `REQUIRE_AUTH` na requisição para ativar o interceptor JWT existente.
 
+### Gestão municipal
+
+Gestor no MVP = usuário ativo com `is_staff=True`. Não há atribuição desse privilégio pela API de perfil.
+
+- `GET /gestao/ocorrencias/`: listagem de gestão.
+- `GET/PATCH /gestao/ocorrencias/{id}/`: detalhe ou mudança de status com justificativa obrigatória.
+- `GET /gestao/indicadores/`: totais, status, tipos, evolução diária e acessibilidade dos locais.
+
+Filtros de ocorrências: `inicio`/`fim` inclusivos em AAAA-MM-DD, `status`, `tipo`, `endereco`.
+Status: `em_analise`, `confirmada`, `resolvida`. Mudança registra responsável, data e justificativa
+em transação; não há validação automática da denúncia.
+Indicadores de locais representam o cadastro atual; os filtros temporais de ocorrências não se aplicam a eles.
+Dias sem ocorrências não aparecem na série diária.
+
 ## Execução e verificação
 
 ```powershell
@@ -98,7 +112,27 @@ Fotos de locais são públicas. Em desenvolvimento apenas `/media/locais/` é se
 fotos de ocorrências passam pelo endpoint autenticado. Em hospedagem, não expor a pasta inteira
 `media/ocorrencias/` publicamente. Uploads não são versionados.
 
+## Frontend entregue neste escopo
+
+- Início integrado: busca, atalhos, filtros, destaques, paginação e informações básicas no próprio Início.
+- Reporte protegido, envio com foto, protocolo e página `/ocorrencias` para acompanhamento.
+- Painel `/painel`: filtros, indicadores/gráficos, lista e atualização de atendimento.
+- Detalhes e Explorar receberam backend; as telas completas continuam fora deste escopo.
+- Perfil recebeu backend; sua tela anterior ainda usa dados demonstrativos.
+- Rotas são trabalho separado; esta entrega não modifica seu cálculo.
 
 ## Branch delivery
 
-User profiles, preferences, favorites and contribution history.
+Municipal dashboard indicators and report management.
+
+## Feature branch order
+
+Backend: `feat/place-accessibility` → `feat/issue-reporting` → `feat/user-profile` → `feat/municipal-dashboard`.
+Frontend: `feat/home-integration` → `feat/issue-reporting` → `feat/municipal-dashboard`.
+The first branch in each repository starts from the updated main branch; subsequent branches build on the preceding feature.
+
+The unpublished combined migration was split before publishing these branches: `0002`/`0003` handle places,
+`0004_reports` handles reports, and `0005_profiles` handles profiles and favorites.
+The existing local database was reconciled by checking its tables, columns and constraints, then recording
+the two already-present schema steps as applied, without recreating tables or changing application data.
+Fresh installations should run `manage.py migrate` normally.

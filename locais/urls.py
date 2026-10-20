@@ -17,6 +17,9 @@ urlpatterns = [
     path('ocorrencias/', views.OcorrenciasView.as_view()),
     path('ocorrencias/<int:pk>/', views.OcorrenciaView.as_view()),
     path('ocorrencias/<int:pk>/foto/', views.FotoOcorrenciaView.as_view()),
+    path('gestao/ocorrencias/', views.GestaoOcorrenciasView.as_view()),
+    path('gestao/ocorrencias/<int:pk>/', views.GestaoOcorrenciaView.as_view()),
+    path('gestao/indicadores/', views.IndicadoresView.as_view()),
     path("locais/", LocalListView.as_view(), name="local-list"),
     path("locais/<int:pk>/", LocalDetailView.as_view(), name="local-detail"),
 ]

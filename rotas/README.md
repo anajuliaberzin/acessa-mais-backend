@@ -1,6 +1,12 @@
 # API de comparação de rotas
 
-`POST /api/rotas/comparar/` é público, aceita somente coordenadas numéricas em JSON e não usa banco, JWT ou geocodificação. O escopo de produto é Sorocaba/SP; esta API valida os limites globais de latitude/longitude, mas não implementa validação de fronteira municipal ou descoberta de municípios.
+`POST /api/rotas/comparar/` é público e aceita coordenadas numéricas em JSON. Na interface, o usuário informa endereços e seleciona os resultados de `GET /api/rotas/enderecos/?q=...`; as coordenadas ficam internas ao sistema.
+
+A busca usa o geocoder OpenRouteService/Pelias com a mesma `ROUTING_API_KEY` do cálculo de rotas, mantida somente no backend. Retorna apenas resultados identificados como Sorocaba/SP, guarda consultas em cache por 24 horas e limita buscas por IP. Resultados de rua sem número são sinalizados como aproximados. Consulta vazia, indisponibilidade e falta de configuração são tratadas sem inventar locais.
+
+Documentação do provedor: https://giscience.github.io/openrouteservice/api-reference/endpoints/geocoder/
+
+O endpoint de comparação continua validando limites globais de latitude/longitude; ele não implementa validação de fronteira municipal para coordenadas enviadas diretamente por clientes externos.
 
 ## Configuração
 

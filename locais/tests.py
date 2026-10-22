@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings, RequestFactory
 from django.contrib import admin
 from rest_framework.test import APIClient
 from PIL import Image
-from .models import Local, Ocorrencia, Avaliacao, HistoricoOcorrencia
+from .models import Local, Ocorrencia, Avaliacao, Favorito, HistoricoOcorrencia
 from .acessibilidade import PESOS, calcular_acessibilidade
 from .admin import LocalForm, LocalAdmin
 
@@ -147,8 +147,44 @@ class ApiTests(TestCase):
 
 
 
+    def test_perfil_persistencia_e_sem_elevacao_privilegio(self):
+        self.login()
+        resposta = self.client.patch('/api/me/', {'nome': 'Meu nome', 'preferencias': ['cadeirante'], 'gestor': True}, format='json')
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(self.client.get('/api/me/').data['preferencias'], ['cadeirante'])
+        self.assertFalse(self.client.get('/api/me/').data['gestor'])
+        self.assertEqual(self.client.patch('/api/me/', {'preferencias': ['invalida']}, format='json').status_code, 400)
+        self.assertEqual(self.client.patch('/api/me/', {'preferencias': [['cadeirante']]}, format='json').status_code, 400)
+        self.login(self.outro)
+        self.assertEqual(self.client.get('/api/me/').data['preferencias'], [])
 
+    def test_favoritos_idempotentes_e_isolados(self):
+        self.login()
+        url = f'/api/me/favoritos/{self.local.pk}/'
+        self.assertEqual(self.client.put(url).status_code, 201)
+        self.assertEqual(self.client.put(url).status_code, 200)
+        self.assertEqual(Favorito.objects.count(), 1)
+        self.assertEqual(self.client.get('/api/me/favoritos/').data['count'], 1)
+        self.login(self.outro)
+        self.assertEqual(self.client.get('/api/me/favoritos/').data['count'], 0)
+        self.client.delete(url)
+        self.assertEqual(Favorito.objects.count(), 1)
+        self.login()
+        self.assertEqual(self.client.delete(url).status_code, 204)
 
+    def test_avaliacao_subjetiva_nao_altera_nota_acessibilidade(self):
+        self.login()
+        url = f'/api/locais/{self.local.pk}/avaliacoes/'
+        resposta = self.client.post(url, {'nota': 1, 'comentario': 'Minha opinião'}, format='json')
+        self.assertEqual(resposta.status_code, 201, resposta.data)
+        self.assertEqual(self.client.post(url, {'nota': 2, 'comentario': 'Duplicada'}, format='json').status_code, 400)
+        detalhe = self.client.get(f'/api/locais/{self.local.pk}/').data
+        self.assertEqual(detalhe['acessibilidade']['nota'], 100)
+        self.assertEqual(detalhe['media_avaliacoes'], 1)
+        self.assertEqual(self.client.get('/api/me/avaliacoes/').data['count'], 1)
+        self.assertEqual(self.client.get('/api/me/contribuicoes/').data['avaliacoes'], 1)
+        self.login(self.outro)
+        self.assertEqual(self.client.delete(f'/api/me/avaliacoes/{resposta.data["id"]}/').status_code, 404)
 
     def test_admin_cadastra_aplicabilidade_e_bloqueia_outra_cidade(self):
         dados = {'nome': 'Térreo', 'categoria': 'COMÉRCIO', 'endereco': 'Sorocaba', 'cidade': 'Sorocaba', 'estado': 'SP', 'localizacao_confirmada': True, **recursos()}

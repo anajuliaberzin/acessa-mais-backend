@@ -66,7 +66,13 @@ Ordenação por acessibilidade exclui notas não calculadas; empates usam nome e
 
 ### Usuário autenticado
 
+- `GET/PATCH /me/`: nome e preferências; cidade/UF fixas, data de entrada e indicação de gestor somente leitura.
+- `GET /me/contribuicoes/`: contadores de avaliações, ocorrências e favoritos.
+- `GET /me/avaliacoes/`: avaliações do próprio usuário.
 - `POST /locais/{id}/avaliacoes/`: `nota` de 1 a 5 e `comentario`. Uma avaliação por usuário/local.
+- `GET/PATCH/DELETE /me/avaliacoes/{id}/`: somente a própria avaliação.
+- `GET /me/favoritos/`: locais favoritos publicados.
+- `PUT/DELETE /me/favoritos/{local_id}/`: favoritar/desfavoritar; operações idempotentes.
 - `GET/POST /ocorrencias/`: listar as próprias ocorrências ou criar reporte.
 - `GET /ocorrencias/{id}/`: detalhe e histórico da própria ocorrência.
 - `GET /ocorrencias/{id}/foto/`: foto privada, acessível ao autor e aos gestores.
@@ -95,4 +101,4 @@ fotos de ocorrências passam pelo endpoint autenticado. Em hospedagem, não expo
 
 ## Branch delivery
 
-Authenticated reports, private photos and tracking.
+User profiles, preferences, favorites and contribution history.

@@ -3,7 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from uuid import uuid4
-from .validators import validar_recursos
+from .validators import validar_recursos, validar_preferencias
 
 
 class Local(models.Model):
@@ -68,8 +68,19 @@ class Avaliacao(models.Model):
         constraints = [models.UniqueConstraint(fields=['local', 'autor'], name='avaliacao_unica_por_autor')]
 
 
+class Perfil(models.Model):
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perfil')
+    nome = models.CharField(max_length=150, blank=True)
+    preferencias = models.JSONField(default=list, blank=True, validators=[validar_preferencias])
 
 
+class Favorito(models.Model):
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    local = models.ForeignKey(Local, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['usuario', 'local'], name='favorito_unico')]
 
 
 TIPOS_PROBLEMA = [

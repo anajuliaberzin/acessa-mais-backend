@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import Local
-from .models import FotoLocal, Avaliacao
+from .models import FotoLocal, Avaliacao, Perfil
 from .acessibilidade import PESOS, ESTADOS
 from django import forms
 
@@ -49,3 +49,4 @@ class LocalAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Avaliacao)
+admin.site.register(Perfil)

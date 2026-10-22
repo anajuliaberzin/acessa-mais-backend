@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings, RequestFactory
 from django.contrib import admin
 from rest_framework.test import APIClient
 from PIL import Image
-from .models import Local, Avaliacao
+from .models import Local, Ocorrencia, Avaliacao, HistoricoOcorrencia
 from .acessibilidade import PESOS, calcular_acessibilidade
 from .admin import LocalForm, LocalAdmin
 
@@ -67,7 +67,13 @@ class ApiTests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + resposta.data['access'])
 
+    def payload(self, **kwargs):
+        return {'endereco': 'Rua da Penha, Sorocaba/SP', 'tipoProblema': 'obstaculo_na_via',
+                'descricao': 'Obstáculo bloqueia a passagem na calçada.', 'confirmadoSorocaba': True, **kwargs}
 
+    def criar_ocorrencia(self, usuario=None):
+        return Ocorrencia.objects.create(autor=usuario or self.usuario, endereco='Centro',
+                                        tipo_problema='obstaculo_na_via', descricao='Obstáculo na calçada')
 
     def test_consultas_publicas_e_revisao_geografica(self):
         for url in ['/api/locais/', '/api/locais/filtros/', '/api/locais/mapa/', f'/api/locais/{self.local.pk}/', f'/api/locais/{self.local.pk}/avaliacoes/']:
@@ -92,10 +98,51 @@ class ApiTests(TestCase):
         self.assertEqual(self.client.get('/api/locais/').data['count'], 2)
         self.assertEqual(self.client.get('/api/locais/', {'ordenacao': 'acessibilidade'}).data['count'], 1)
 
+    def test_reporte_exige_jwt(self):
+        self.assertEqual(self.client.post('/api/ocorrencias/', self.payload()).status_code, 401)
 
+    def test_reporte_protocolo_autor_e_historico(self):
+        self.login()
+        resposta = self.client.post('/api/ocorrencias/', self.payload(autor=self.outro.pk, status='resolvida', latitude='-23.501234', longitude='-47.456789'), format='multipart')
+        self.assertEqual(resposta.status_code, 201, resposta.data)
+        ocorrencia = Ocorrencia.objects.get(pk=resposta.data['id'])
+        self.assertEqual(ocorrencia.autor, self.usuario)
+        self.assertEqual(ocorrencia.status, 'em_analise')
+        self.assertTrue(resposta.data['protocolo'].startswith('AC-'))
+        self.assertEqual(len(resposta.data['historico']), 1)
+        self.assertEqual(resposta.json()['latitude'], -23.501234)
 
+    def test_validacoes_reporte(self):
+        self.login()
+        for payload in [self.payload(confirmadoSorocaba=False), self.payload(descricao='curta'), self.payload(latitude='-23.5'), self.payload(tipoProblema='invalido')]:
+            self.assertEqual(self.client.post('/api/ocorrencias/', payload, format='json').status_code, 400)
 
+    def test_foto_validada_e_privada(self):
+        with TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=directory):
+            self.login()
+            imagem = BytesIO()
+            Image.new('RGB', (3, 3)).save(imagem, format='PNG')
+            resposta = self.client.post('/api/ocorrencias/', self.payload(foto=SimpleUploadedFile('foto.png', imagem.getvalue(), content_type='image/png')), format='multipart')
+            self.assertEqual(resposta.status_code, 201, resposta.data)
+            url = resposta.data['fotoUrl']
+            resposta_foto = self.client.get(url)
+            self.assertEqual(resposta_foto.status_code, 200)
+            resposta_foto.close()
+            self.login(self.outro)
+            self.assertEqual(self.client.get(url).status_code, 404)
+            self.client.credentials()
+            self.assertEqual(self.client.get(url).status_code, 401)
+            self.login()
+            falsa = SimpleUploadedFile('falsa.png', b'nao e imagem', content_type='image/png')
+            self.assertEqual(self.client.post('/api/ocorrencias/', self.payload(foto=falsa), format='multipart').status_code, 400)
 
+    def test_ocorrencias_isoladas_por_autor(self):
+        minha = self.criar_ocorrencia()
+        outra = self.criar_ocorrencia(self.outro)
+        self.login()
+        resposta = self.client.get('/api/ocorrencias/')
+        self.assertEqual([x['id'] for x in resposta.data['results']], [minha.pk])
+        self.assertEqual(self.client.get(f'/api/ocorrencias/{outra.pk}/').status_code, 404)
 
 
 

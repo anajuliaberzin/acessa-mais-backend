@@ -2,6 +2,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from uuid import uuid4
 from .validators import validar_recursos
 
 
@@ -65,3 +66,49 @@ class Avaliacao(models.Model):
     class Meta:
         ordering = ['-created_at', '-pk']
         constraints = [models.UniqueConstraint(fields=['local', 'autor'], name='avaliacao_unica_por_autor')]
+
+
+
+
+
+
+TIPOS_PROBLEMA = [
+    'rampa_ausente_ou_inadequada', 'calcada_em_mau_estado', 'elevador_indisponivel',
+    'banheiro_nao_adaptado', 'vaga_acessivel_indisponivel',
+    'piso_tatil_ausente_ou_danificado', 'obstaculo_na_via', 'outro',
+]
+STATUS = [('em_analise', 'Em análise'), ('confirmada', 'Confirmada'), ('resolvida', 'Resolvida')]
+
+
+def gerar_protocolo():
+    return 'AC-' + uuid4().hex.upper()
+
+
+class Ocorrencia(models.Model):
+    protocolo = models.CharField(max_length=35, unique=True, default=gerar_protocolo, editable=False)
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    endereco = models.CharField(max_length=500)
+    latitude = models.DecimalField(max_digits=8, decimal_places=6, null=True, blank=True,
+                                  validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True,
+                                   validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    tipo_problema = models.CharField(max_length=60, choices=[(x, x) for x in TIPOS_PROBLEMA])
+    descricao = models.TextField(max_length=5000)
+    foto = models.ImageField(upload_to='ocorrencias/%Y/%m/', blank=True)
+    status = models.CharField(max_length=15, choices=STATUS, default='em_analise')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+
+
+class HistoricoOcorrencia(models.Model):
+    ocorrencia = models.ForeignKey(Ocorrencia, on_delete=models.CASCADE, related_name='historico')
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    status = models.CharField(max_length=15, choices=STATUS)
+    justificativa = models.TextField(max_length=3000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']

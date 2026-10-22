@@ -11,8 +11,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Local, Avaliacao
-from .serializers import LocalSerializer, AvaliacaoSerializer
+from .models import Local, Avaliacao, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
+from .serializers import LocalSerializer, AvaliacaoSerializer, OcorrenciaSerializer
 from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
 
 
@@ -109,3 +109,48 @@ class AvaliacoesView(generics.ListCreateAPIView):
                 serializer.save(autor=self.request.user, local=local)
         except IntegrityError:
             raise ValidationError('Você já avaliou este local.')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class OcorrenciasView(generics.ListCreateAPIView):
+    serializer_class = OcorrenciaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = Paginacao
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        return Ocorrencia.objects.filter(autor=self.request.user).prefetch_related('historico')
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        ocorrencia = serializer.save(autor=self.request.user)
+        HistoricoOcorrencia.objects.create(ocorrencia=ocorrencia, responsavel=self.request.user,
+                                          status='em_analise', justificativa='Ocorrência recebida para análise.')
+
+
+class OcorrenciaView(generics.RetrieveAPIView):
+    serializer_class = OcorrenciaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Ocorrencia.objects.filter(autor=self.request.user).prefetch_related('historico')
+
+
+class FotoOcorrenciaView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        queryset = Ocorrencia.objects.all() if request.user.is_staff else Ocorrencia.objects.filter(autor=request.user)
+        ocorrencia = get_object_or_404(queryset.exclude(foto=''), pk=pk)
+        return FileResponse(ocorrencia.foto.open('rb'))

@@ -64,9 +64,17 @@ atendido do grupo. Não representa certificação de adequação a todas as nece
 `bbox` usa `oeste,sul,leste,norte`; `ordenacao` aceita `nome` ou `acessibilidade`.
 Ordenação por acessibilidade exclui notas não calculadas; empates usam nome e ID.
 
-### Avaliações autenticadas
+### Usuário autenticado
 
-- `POST /locais/{id}/avaliacoes/`: nota subjetiva e comentário, separados da acessibilidade.
+- `POST /locais/{id}/avaliacoes/`: `nota` de 1 a 5 e `comentario`. Uma avaliação por usuário/local.
+- `GET/POST /ocorrencias/`: listar as próprias ocorrências ou criar reporte.
+- `GET /ocorrencias/{id}/`: detalhe e histórico da própria ocorrência.
+- `GET /ocorrencias/{id}/foto/`: foto privada, acessível ao autor e aos gestores.
+
+Criação de ocorrência aceita JSON ou multipart com `endereco`, `tipoProblema`, `descricao`,
+`confirmadoSorocaba: true`, coordenadas opcionais (ambas, até seis casas decimais) e `foto` opcional.
+Imagem JPEG, PNG ou WebP válida de até 5 MB. Autor, protocolo e status inicial são definidos pelo servidor.
+O front utiliza `REQUIRE_AUTH` na requisição para ativar o interceptor JWT existente.
 
 ## Execução e verificação
 
@@ -87,4 +95,4 @@ fotos de ocorrências passam pelo endpoint autenticado. Em hospedagem, não expo
 
 ## Branch delivery
 
-Place accessibility, public search, detail and map filters.
+Authenticated reports, private photos and tracking.

@@ -95,3 +95,8 @@ class OcorrenciaSerializer(serializers.ModelSerializer):
         fields = ('id', 'protocolo', 'endereco', 'latitude', 'longitude', 'tipoProblema', 'descricao',
                   'foto', 'fotoUrl', 'status', 'dataCriacao', 'historico', 'confirmadoSorocaba')
         read_only_fields = ('id', 'protocolo', 'status')
+
+
+class AlterarStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=Ocorrencia._meta.get_field('status').choices)
+    justificativa = serializers.CharField(min_length=5, max_length=3000)

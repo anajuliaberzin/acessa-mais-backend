@@ -144,8 +144,39 @@ class ApiTests(TestCase):
         self.assertEqual([x['id'] for x in resposta.data['results']], [minha.pk])
         self.assertEqual(self.client.get(f'/api/ocorrencias/{outra.pk}/').status_code, 404)
 
+    def test_gestao_restrita(self):
+        ocorrencia = self.criar_ocorrencia()
+        self.login()
+        for url in ['/api/gestao/indicadores/', '/api/gestao/ocorrencias/', f'/api/gestao/ocorrencias/{ocorrencia.pk}/']:
+            self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.patch(f'/api/gestao/ocorrencias/{ocorrencia.pk}/', {'status': 'resolvida', 'justificativa': 'Resolvida hoje'}, format='json').status_code, 403)
 
+    def test_gestor_atualiza_e_autor_acompanha(self):
+        ocorrencia = self.criar_ocorrencia()
+        self.login(self.gestor)
+        url = f'/api/gestao/ocorrencias/{ocorrencia.pk}/'
+        self.assertEqual(self.client.patch(url, {'status': 'resolvida', 'justificativa': ''}, format='json').status_code, 400)
+        resposta = self.client.patch(url, {'status': 'resolvida', 'justificativa': 'Obstáculo removido pela equipe.'}, format='json')
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(HistoricoOcorrencia.objects.get().responsavel, self.gestor)
+        self.login()
+        resposta = self.client.get(f'/api/ocorrencias/{ocorrencia.pk}/')
+        self.assertEqual(resposta.data['status'], 'resolvida')
+        self.assertEqual(len(resposta.data['historico']), 1)
 
+    def test_indicadores_respeitam_filtros_e_dados_sem_nota(self):
+        self.criar_ocorrencia()
+        resolvida = self.criar_ocorrencia()
+        resolvida.status = 'resolvida'
+        resolvida.save()
+        Local.objects.create(nome='Sem nota', categoria='cultura', endereco='Sorocaba', localizacao_confirmada=True)
+        self.login(self.gestor)
+        resposta = self.client.get('/api/gestao/indicadores/', {'status': 'resolvida'})
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.data['total_ocorrencias'], 1)
+        self.assertEqual(resposta.data['locais_sem_nota'], 1)
+        self.assertEqual(resposta.data['media_acessibilidade'], 100)
+        self.assertEqual(self.client.get('/api/gestao/indicadores/', {'inicio': '2026-10-21', 'fim': '2026-10-20'}).status_code, 400)
 
     def test_perfil_persistencia_e_sem_elevacao_privilegio(self):
         self.login()

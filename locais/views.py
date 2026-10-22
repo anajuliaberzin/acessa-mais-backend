@@ -12,7 +12,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Local, Avaliacao, Perfil, Favorito, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
-from .serializers import LocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer
+from .serializers import LocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer, AlterarStatusSerializer
 from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
 
 
@@ -200,3 +200,74 @@ class FotoOcorrenciaView(APIView):
         queryset = Ocorrencia.objects.all() if request.user.is_staff else Ocorrencia.objects.filter(autor=request.user)
         ocorrencia = get_object_or_404(queryset.exclude(foto=''), pk=pk)
         return FileResponse(ocorrencia.foto.open('rb'))
+
+
+def filtrar_ocorrencias(queryset, params):
+    for parametro, campo, valores in [('status', 'status', dict(STATUS)), ('tipo', 'tipo_problema', TIPOS_PROBLEMA)]:
+        if valor := params.get(parametro):
+            if valor not in valores:
+                raise ValidationError({parametro: 'Filtro inválido.'})
+            queryset = queryset.filter(**{campo: valor})
+    datas = {}
+    for parametro in ('inicio', 'fim'):
+        if valor := params.get(parametro):
+            try:
+                datas[parametro] = date.fromisoformat(valor)
+            except ValueError:
+                raise ValidationError({parametro: 'Use AAAA-MM-DD.'})
+    if len(datas) == 2 and datas['inicio'] > datas['fim']:
+        raise ValidationError('O início deve ser anterior ao fim.')
+    if 'inicio' in datas:
+        queryset = queryset.filter(created_at__date__gte=datas['inicio'])
+    if 'fim' in datas:
+        queryset = queryset.filter(created_at__date__lte=datas['fim'])
+    if endereco := params.get('endereco', '').strip():
+        queryset = queryset.filter(endereco__icontains=endereco)
+    return queryset
+
+
+class GestaoOcorrenciasView(generics.ListAPIView):
+    serializer_class = OcorrenciaSerializer
+    permission_classes = [permissions.IsAdminUser]
+    pagination_class = Paginacao
+
+    def get_queryset(self):
+        return filtrar_ocorrencias(Ocorrencia.objects.prefetch_related('historico'), self.request.query_params)
+
+
+class GestaoOcorrenciaView(generics.RetrieveAPIView):
+    serializer_class = OcorrenciaSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Ocorrencia.objects.prefetch_related('historico')
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        serializer = AlterarStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ocorrencia = get_object_or_404(Ocorrencia.objects.select_for_update(), pk=pk)
+        if ocorrencia.status == serializer.validated_data['status']:
+            raise ValidationError('Selecione um status diferente do atual.')
+        ocorrencia.status = serializer.validated_data['status']
+        ocorrencia.save(update_fields=['status', 'updated_at'])
+        HistoricoOcorrencia.objects.create(ocorrencia=ocorrencia, responsavel=request.user, **serializer.validated_data)
+        return Response(OcorrenciaSerializer(ocorrencia, context={'request': request}).data)
+
+
+class IndicadoresView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        ocorrencias = filtrar_ocorrencias(Ocorrencia.objects.all(), request.query_params)
+        locais = filtrar_locais(locais_publicos(), request.query_params)
+        calculos = [calcular_acessibilidade(local.recursos) for local in locais]
+        notas = [item['nota'] for item in calculos if item['nota'] is not None]
+        classes = ['baixa acessibilidade', 'acessibilidade parcial', 'boa acessibilidade', 'alta acessibilidade']
+        return Response({
+            'total_ocorrencias': ocorrencias.count(),
+            'por_status': list(ocorrencias.order_by().values('status').annotate(total=Count('pk'))),
+            'por_tipo': list(ocorrencias.order_by().values('tipo_problema').annotate(total=Count('pk')).order_by('-total')),
+            'evolucao': list(ocorrencias.annotate(dia=TruncDate('created_at')).values('dia').annotate(total=Count('pk')).order_by('dia')),
+            'total_locais': len(calculos), 'locais_com_nota': len(notas), 'locais_sem_nota': len(calculos) - len(notas),
+            'media_acessibilidade': sum(notas) / len(notas) if notas else None,
+            'por_acessibilidade': [{'classificacao': classe, 'total': sum(item['classificacao'] == classe for item in calculos)} for classe in classes],
+        })

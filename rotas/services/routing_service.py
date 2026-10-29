@@ -9,7 +9,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from django.conf import settings
 
 
-ORS_URL = "https://api.openrouteservice.org/v2/directions/foot-walking/geojson"
+ORS_URL = "https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson"
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
 

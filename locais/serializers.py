@@ -28,6 +28,25 @@ class LocalSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class CriarLocalSerializer(serializers.ModelSerializer):
+    localizacao_confirmada = serializers.BooleanField(required=True)
+    latitude = serializers.DecimalField(max_digits=8, decimal_places=6, min_value=-90, max_value=90)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=-180, max_value=180)
+
+    class Meta:
+        model = Local
+        fields = ('nome', 'categoria', 'endereco', 'descricao', 'cidade', 'estado',
+                  'latitude', 'longitude', 'localizacao_confirmada', 'recursos')
+
+    def validate_categoria(self, value):
+        return value.strip().casefold()
+
+    def validate_localizacao_confirmada(self, value):
+        if not value:
+            raise serializers.ValidationError('Confirme que o local pertence a Sorocaba/SP.')
+        return value
+
+
 class AvaliacaoSerializer(serializers.ModelSerializer):
     nomeLocal = serializers.CharField(source='local.nome', read_only=True)
 
@@ -43,6 +62,7 @@ class PerfilSerializer(serializers.ModelSerializer):
     uf = serializers.SerializerMethodField()
     membroDesde = serializers.DateTimeField(source='usuario.date_joined', read_only=True)
     gestor = serializers.BooleanField(source='usuario.is_staff', read_only=True)
+    superadmin = serializers.BooleanField(source='usuario.is_superuser', read_only=True)
 
     def get_cidade(self, obj):
         return 'Sorocaba'
@@ -52,7 +72,7 @@ class PerfilSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Perfil
-        fields = ('id', 'nome', 'cidade', 'uf', 'membroDesde', 'preferencias', 'gestor')
+        fields = ('id', 'nome', 'cidade', 'uf', 'membroDesde', 'preferencias', 'gestor', 'superadmin')
 
 
 class HistoricoSerializer(serializers.ModelSerializer):

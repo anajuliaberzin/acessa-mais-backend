@@ -12,8 +12,24 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Local, Avaliacao, Perfil, Favorito, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
-from .serializers import LocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer, AlterarStatusSerializer
+from .serializers import LocalSerializer, CriarLocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer, AlterarStatusSerializer
 from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
+
+
+class SuperadminPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user.is_authenticated and request.user.is_active and request.user.is_superuser)
+
+
+class CriarLocalView(generics.CreateAPIView):
+    permission_classes = [SuperadminPermission]
+    serializer_class = CriarLocalSerializer
+
+    def create(self, request, *args, **kwargs):
+        entrada = self.get_serializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        local = entrada.save()
+        return Response(LocalSerializer(local).data, status=201)
 
 
 class Paginacao(PageNumberPagination):

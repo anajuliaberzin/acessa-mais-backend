@@ -206,16 +206,66 @@ class ApiTests(TestCase):
     def test_avaliacao_subjetiva_nao_altera_nota_acessibilidade(self):
         self.login()
         url = f'/api/locais/{self.local.pk}/avaliacoes/'
-        resposta = self.client.post(url, {'nota': 1, 'comentario': 'Minha opinião'}, format='json')
+        resposta = self.client.post(url, {'nota': 1}, format='json')
         self.assertEqual(resposta.status_code, 201, resposta.data)
+        self.assertEqual(resposta.data['comentario'], '')
         self.assertEqual(self.client.post(url, {'nota': 2, 'comentario': 'Duplicada'}, format='json').status_code, 400)
         detalhe = self.client.get(f'/api/locais/{self.local.pk}/').data
         self.assertEqual(detalhe['acessibilidade']['nota'], 100)
         self.assertEqual(detalhe['media_avaliacoes'], 1)
+        self.assertEqual(detalhe['total_avaliacoes'], 1)
+        self.assertEqual(self.client.get(url).data['results'][0]['nota'], 1)
         self.assertEqual(self.client.get('/api/me/avaliacoes/').data['count'], 1)
+        self.assertEqual(self.client.get('/api/me/avaliacoes/', {'local': self.local.pk}).data['count'], 1)
         self.assertEqual(self.client.get('/api/me/contribuicoes/').data['avaliacoes'], 1)
+        avaliacao_url = f'/api/me/avaliacoes/{resposta.data["id"]}/'
+        atualizada = self.client.patch(avaliacao_url, {'nota': 4, 'comentario': 'Muito bom'}, format='json')
+        self.assertEqual(atualizada.status_code, 200, atualizada.data)
+        self.assertEqual(self.client.get(f'/api/locais/{self.local.pk}/').data['media_avaliacoes'], 4)
         self.login(self.outro)
-        self.assertEqual(self.client.delete(f'/api/me/avaliacoes/{resposta.data["id"]}/').status_code, 404)
+        self.assertEqual(self.client.patch(avaliacao_url, {'nota': 2}, format='json').status_code, 404)
+        self.assertEqual(self.client.delete(avaliacao_url).status_code, 404)
+        self.login()
+        self.assertEqual(self.client.delete(avaliacao_url).status_code, 204)
+        detalhe = self.client.get(f'/api/locais/{self.local.pk}/').data
+        self.assertIsNone(detalhe['media_avaliacoes'])
+        self.assertEqual(detalhe['total_avaliacoes'], 0)
+        self.assertEqual(self.client.get('/api/me/avaliacoes/', {'local': 'invalido'}).status_code, 400)
+
+    def test_validacoes_e_autenticacao_avaliacoes(self):
+        url = f'/api/locais/{self.local.pk}/avaliacoes/'
+        self.assertEqual(self.client.post(url, {'nota': 5}, format='json').status_code, 401)
+        self.login()
+        for dados in ({'nota': 0}, {'nota': 6}, {'nota': 'invalida'}, {'nota': 5, 'comentario': 'x' * 3001}):
+            self.assertEqual(self.client.post(url, dados, format='json').status_code, 400, dados)
+
+    def test_indicadores_incluem_agregados_reais_de_avaliacoes(self):
+        outro_local = Local.objects.create(
+            nome='Museu', categoria='cultura', endereco='Centro, Sorocaba/SP',
+            localizacao_confirmada=True,
+        )
+        Avaliacao.objects.create(local=self.local, autor=self.usuario, nota=5)
+        Avaliacao.objects.create(local=self.local, autor=self.outro, nota=3)
+        Avaliacao.objects.create(local=outro_local, autor=self.gestor, nota=1, comentario='Precisa melhorar')
+        Avaliacao.objects.create(local=self.pendente, autor=self.gestor, nota=5)
+
+        self.login(self.gestor)
+        resposta = self.client.get('/api/gestao/indicadores/')
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.data['total_avaliacoes'], 3)
+        self.assertEqual(resposta.data['media_avaliacoes'], 3)
+        self.assertEqual(
+            resposta.data['avaliacoes_por_nota'],
+            [
+                {'nota': 1, 'total': 1},
+                {'nota': 2, 'total': 0},
+                {'nota': 3, 'total': 1},
+                {'nota': 4, 'total': 0},
+                {'nota': 5, 'total': 1},
+            ],
+        )
+        self.assertEqual(resposta.data['locais_mais_bem_avaliados'][0]['nome'], 'Biblioteca')
+        self.assertEqual(resposta.data['locais_menos_bem_avaliados'][0]['nome'], 'Museu')
 
     def test_admin_cadastra_aplicabilidade_e_bloqueia_outra_cidade(self):
         dados = {'nome': 'Térreo', 'categoria': 'COMÉRCIO', 'endereco': 'Sorocaba', 'cidade': 'Sorocaba', 'estado': 'SP', 'localizacao_confirmada': True, **recursos()}

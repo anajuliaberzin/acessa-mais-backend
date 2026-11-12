@@ -60,7 +60,7 @@ class Avaliacao(models.Model):
     local = models.ForeignKey(Local, on_delete=models.CASCADE, related_name='avaliacoes')
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     nota = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
-    comentario = models.TextField(max_length=3000)
+    comentario = models.TextField(max_length=3000, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

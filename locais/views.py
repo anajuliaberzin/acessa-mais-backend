@@ -151,7 +151,15 @@ class MinhasAvaliacoesView(generics.ListAPIView):
     pagination_class = Paginacao
 
     def get_queryset(self):
-        return Avaliacao.objects.filter(autor=self.request.user).select_related('local')
+        queryset = Avaliacao.objects.filter(autor=self.request.user).select_related('local')
+        local_id = self.request.query_params.get('local')
+        if local_id is not None:
+            try:
+                local_id = int(local_id)
+            except ValueError:
+                raise ValidationError({'local': 'Informe um identificador de local válido.'})
+            queryset = queryset.filter(local_id=local_id)
+        return queryset
 
 
 class FavoritosView(generics.ListAPIView):
@@ -278,6 +286,17 @@ class IndicadoresView(APIView):
         calculos = [calcular_acessibilidade(local.recursos) for local in locais]
         notas = [item['nota'] for item in calculos if item['nota'] is not None]
         classes = ['baixa acessibilidade', 'acessibilidade parcial', 'boa acessibilidade', 'alta acessibilidade']
+        avaliacoes = Avaliacao.objects.filter(local__in=locais_publicos())
+        resumo_avaliacoes = avaliacoes.aggregate(media=Avg('nota'), total=Count('pk'))
+        distribuicao_avaliacoes = list(
+            avaliacoes.order_by().values('nota').annotate(total=Count('pk')).order_by('nota')
+        )
+        total_por_nota = {item['nota']: item['total'] for item in distribuicao_avaliacoes}
+        locais_avaliados = locais_publicos().filter(total_avaliacoes__gt=0)
+
+        def ranking(queryset):
+            return list(queryset.values('id', 'nome', 'media_avaliacoes', 'total_avaliacoes'))
+
         return Response({
             'total_ocorrencias': ocorrencias.count(),
             'por_status': list(ocorrencias.order_by().values('status').annotate(total=Count('pk'))),
@@ -286,4 +305,15 @@ class IndicadoresView(APIView):
             'total_locais': len(calculos), 'locais_com_nota': len(notas), 'locais_sem_nota': len(calculos) - len(notas),
             'media_acessibilidade': sum(notas) / len(notas) if notas else None,
             'por_acessibilidade': [{'classificacao': classe, 'total': sum(item['classificacao'] == classe for item in calculos)} for classe in classes],
+            'total_avaliacoes': resumo_avaliacoes['total'],
+            'media_avaliacoes': resumo_avaliacoes['media'],
+            'avaliacoes_por_nota': [
+                {'nota': nota, 'total': total_por_nota.get(nota, 0)} for nota in range(1, 6)
+            ],
+            'locais_mais_bem_avaliados': ranking(
+                locais_avaliados.order_by('-media_avaliacoes', '-total_avaliacoes', 'nome', 'pk')[:5]
+            ),
+            'locais_menos_bem_avaliados': ranking(
+                locais_avaliados.order_by('media_avaliacoes', '-total_avaliacoes', 'nome', 'pk')[:5]
+            ),
         })

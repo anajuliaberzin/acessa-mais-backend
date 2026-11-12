@@ -49,6 +49,7 @@ class CriarLocalSerializer(serializers.ModelSerializer):
 
 class AvaliacaoSerializer(serializers.ModelSerializer):
     nomeLocal = serializers.CharField(source='local.nome', read_only=True)
+    comentario = serializers.CharField(required=False, allow_blank=True, max_length=3000)
 
     class Meta:
         model = Avaliacao

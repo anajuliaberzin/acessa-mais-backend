@@ -12,7 +12,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Local, Avaliacao, Perfil, Favorito, Ocorrencia, HistoricoOcorrencia, STATUS, TIPOS_PROBLEMA
-from .serializers import LocalSerializer, CriarLocalSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer, AlterarStatusSerializer
+from .serializers import LocalSerializer, CriarLocalSerializer, CadastroSerializer, AvaliacaoSerializer, PerfilSerializer, OcorrenciaSerializer, AlterarStatusSerializer
 from .acessibilidade import PESOS, NECESSIDADES, calcular_acessibilidade
 
 
@@ -30,6 +30,20 @@ class CriarLocalView(generics.CreateAPIView):
         entrada.is_valid(raise_exception=True)
         local = entrada.save()
         return Response(LocalSerializer(local).data, status=201)
+
+
+class CadastroView(generics.CreateAPIView):
+    serializer_class = CadastroSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        usuario = serializer.save()
+        return Response(
+            {'id': usuario.pk, 'username': usuario.username, 'email': usuario.email},
+            status=201,
+        )
 
 
 class Paginacao(PageNumberPagination):

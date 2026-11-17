@@ -71,6 +71,54 @@ class ApiTests(TestCase):
         return {'endereco': 'Rua da Penha, Sorocaba/SP', 'tipoProblema': 'obstaculo_na_via',
                 'descricao': 'Obstáculo bloqueia a passagem na calçada.', 'confirmadoSorocaba': True, **kwargs}
 
+    def test_cadastro_cria_usuario_perfil_e_permite_login(self):
+        dados = {
+            'nome': 'Pessoa Teste',
+            'username': 'pessoa-teste',
+            'email': 'pessoa@example.com',
+            'password': 'Mosaico!72Verde',
+            'password_confirmation': 'Mosaico!72Verde',
+        }
+        resposta = self.client.post('/api/auth/register/', dados, format='json')
+        self.assertEqual(resposta.status_code, 201, resposta.data)
+        self.assertIsInstance(resposta.data['id'], int)
+        self.assertEqual(resposta.data['username'], dados['username'])
+        self.assertEqual(resposta.data['email'], dados['email'])
+        usuario = get_user_model().objects.get(username=dados['username'])
+        self.assertTrue(usuario.check_password(dados['password']))
+        self.assertEqual(usuario.perfil.nome, dados['nome'])
+        login = self.client.post(
+            '/api/auth/login/',
+            {'username': dados['username'], 'password': dados['password']},
+            format='json',
+        )
+        self.assertEqual(login.status_code, 200, login.data)
+        self.assertIn('access', login.data)
+        self.assertIn('refresh', login.data)
+
+    def test_cadastro_rejeita_senhas_diferentes_senhas_fracas_e_usuario_existente(self):
+        dados = {
+            'nome': 'Pessoa Teste',
+            'username': 'nova-pessoa',
+            'email': 'pessoa@example.com',
+            'password': 'Mosaico!72Verde',
+            'password_confirmation': 'OutraSenha!72Verde',
+        }
+        resposta = self.client.post('/api/auth/register/', dados, format='json')
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('password_confirmation', resposta.data)
+
+        dados['password'] = dados['password_confirmation'] = 'password'
+        resposta = self.client.post('/api/auth/register/', dados, format='json')
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('password', resposta.data)
+
+        dados['password'] = dados['password_confirmation'] = 'Mosaico!72Verde'
+        dados['username'] = 'cidadao'
+        resposta = self.client.post('/api/auth/register/', dados, format='json')
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('username', resposta.data)
+
     def criar_ocorrencia(self, usuario=None):
         return Ocorrencia.objects.create(autor=usuario or self.usuario, endereco='Centro',
                                         tipo_problema='obstaculo_na_via', descricao='Obstáculo na calçada')

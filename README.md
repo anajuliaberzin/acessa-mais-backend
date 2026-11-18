@@ -194,6 +194,21 @@ Resposta HTTP 200:
 
 Um refresh token inválido ou expirado retorna HTTP 401. Use `Authorization: Bearer <access-token>` para autenticar requisições.
 
+## Dados demonstrativos do painel
+
+Para popular os gráficos em homologação, o comando `seed_dashboard_demo` cria 12 locais, 18 ocorrências,
+históricos e 96 avaliações sintéticos com nomes e textos marcados como demonstração. Ele é repetível,
+não remove registros e cria somente usuários inativos, sem privilégios e sem senha utilizável.
+
+No serviço de **homologação** do Render, configure temporariamente a variável
+`ALLOW_DEMO_DATA_SEEDING=true`, faça o deploy deste código e execute pelo Shell do serviço:
+
+```text
+python manage.py seed_dashboard_demo --confirm
+```
+
+Não configure essa variável em produção. Após a carga, remova-a do serviço de homologação.
+
 A permissão padrão é `AllowAny`: as consultas de locais continuam acessíveis sem token. Views futuras que exigirem autenticação devem declarar `permission_classes = [IsAuthenticated]`, importando `IsAuthenticated` de `rest_framework.permissions`. Um token inválido enviado no cabeçalho pode retornar HTTP 401 mesmo em uma view pública.
 
 ## Observações

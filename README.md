@@ -151,6 +151,21 @@ Os endpoints `GET /api/locais/` e `GET /api/locais/{id}/` são públicos, inclui
 
 A autenticação utiliza `djangorestframework-simplejwt`. Para testar localmente, utilize um usuário Django existente ou crie um com `python manage.py createsuperuser`.
 
+Para criar uma conta, envie `POST /api/auth/register/` com `Content-Type: application/json`:
+
+```json
+{
+  "nome": "Pessoa Usuária",
+  "username": "pessoa",
+  "email": "pessoa@example.com",
+  "password": "uma-senha-forte",
+  "password_confirmation": "uma-senha-forte"
+}
+```
+
+Uma criação bem-sucedida retorna HTTP 201 com `id`, `username` e `email`. Usuário duplicado,
+senhas diferentes ou senha que não atende às validações configuradas retornam HTTP 400.
+
 Envie `POST /api/auth/login/` com `Content-Type: application/json`:
 
 ```json

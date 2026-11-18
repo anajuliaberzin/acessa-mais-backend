@@ -1,6 +1,45 @@
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from .models import Local, FotoLocal, Avaliacao, Perfil, Ocorrencia, HistoricoOcorrencia
 from .acessibilidade import calcular_acessibilidade
+
+
+class CadastroSerializer(serializers.Serializer):
+    nome = serializers.CharField(min_length=2, max_length=150)
+    username = serializers.CharField(
+        max_length=150,
+        validators=[UniqueValidator(queryset=get_user_model().objects.all())],
+    )
+    email = serializers.EmailField(max_length=254)
+    password = serializers.CharField(write_only=True, max_length=128, trim_whitespace=False)
+    password_confirmation = serializers.CharField(write_only=True, max_length=128, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirmation']:
+            raise serializers.ValidationError({'password_confirmation': 'As senhas não conferem.'})
+
+        user_model = get_user_model()
+        user = user_model(username=attrs['username'], email=attrs['email'])
+        try:
+            validate_password(attrs['password'], user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'password': error.messages}) from error
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        user_model = get_user_model()
+        usuario = user_model.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+        )
+        Perfil.objects.create(usuario=usuario, nome=validated_data['nome'])
+        return usuario
 
 
 class FotoLocalSerializer(serializers.ModelSerializer):

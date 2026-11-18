@@ -5,6 +5,7 @@ from . import views
 
 
 urlpatterns = [
+    path('auth/register/', views.CadastroView.as_view(), name='auth-register'),
     path('gestao/locais/', views.CriarLocalView.as_view(), name='criar-local'),
     path('locais/filtros/', views.FiltrosView.as_view()),
     path('locais/mapa/', views.MapaView.as_view()),
